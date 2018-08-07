@@ -1,5 +1,5 @@
 {
-  "name": "naivechain",
+  "name": "flexchain",
   "version": "1.0.0",
   "description": "",
   "scripts": {
@@ -10,9 +10,13 @@
     "crypto-js": "^3.1.6",
     "express": "^4.16.3",
     "lowdb": "^1.0.0",
+    "typescript": "^2.9.2",
     "ws": "^1.1.0"
   },
   "engines": {
     "node": ">=4.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^10.5.7"
   }
 }
