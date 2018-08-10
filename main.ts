@@ -2,26 +2,11 @@ import * as CryptoJS from 'crypto-js';
 import * as express from 'express';
 import * as bodyParser from 'body-parser';
 import * as WebSocket from 'ws';
+import Block from './Block';
 
 let http_port = process.env.HTTP_PORT || 3001;
 let p2p_port = process.env.P2P_PORT || 6001;
 let initialPeers = process.env.PEERS ? process.env.PEERS.split(',') : [];
-
-class Block {
-  public index: number;
-  private previousHash: string;
-  private timestamp: Date;
-  private data: string;
-  public hash: string;
-
-  constructor(index, previousHash, timestamp, data, hash) {
-      this.index = index;
-      this.previousHash = previousHash.toString();
-      this.timestamp = timestamp;
-      this.data = data;
-      this.hash = hash.toString();
-  }
-}
 
 let sockets = [];
 let MessageType = {
