@@ -1,11 +1,11 @@
 class Block {
   public index: number;
-  private previousHash: string;
-  private timestamp: Date;
-  private data: string;
+  public previousHash: string;
+  public timestamp: Date;
+  public data: string;
   public hash: string;
 
-  constructor(index, previousHash, timestamp, data, hash) {
+  constructor(index: number, previousHash: string, timestamp: Date, data: string, hash: string) {
       this.index = index;
       this.previousHash = previousHash.toString();
       this.timestamp = timestamp;

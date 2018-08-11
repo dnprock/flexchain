@@ -6,16 +6,17 @@ var bodyParser = require("body-parser");
 var WebSocket = require("ws");
 var Block_1 = require("./Block");
 var http_port = process.env.HTTP_PORT || 3001;
-var p2p_port = process.env.P2P_PORT || 6001;
+var p2p_port = (process.env.P2P_PORT ? +process.env.P2P_PORT : 6001);
 var initialPeers = process.env.PEERS ? process.env.PEERS.split(',') : [];
 var sockets = [];
+var requests = [];
 var MessageType = {
     QUERY_LATEST: 0,
     QUERY_ALL: 1,
     RESPONSE_BLOCKCHAIN: 2
 };
 var getGenesisBlock = function () {
-    return new Block_1.default(0, "0", 1465154705, "my genesis block!!", "816534932c2b7154836da6afc367695e6337db8a921823784c14378abed4f7d7");
+    return new Block_1.default(0, "0", (new Date()), "flexchain genesis block!!", "816534932c2b7154836da6afc367695e6337db8a921823784c14378abed4f7d7");
 };
 var blockchain = [getGenesisBlock()];
 var initHttpServer = function () {
@@ -25,12 +26,12 @@ var initHttpServer = function () {
     app.post('/mineBlock', function (req, res) {
         var newBlock = generateNextBlock(req.body.data);
         addBlock(newBlock);
-        broadcast(responseLatestMsg());
+        broadcast(JSON.stringify(responseLatestMsg()));
         console.log('block added: ' + JSON.stringify(newBlock));
         res.send();
     });
     app.get('/peers', function (req, res) {
-        res.send(sockets.map(function (s) { return s._socket.remoteAddress + ':' + s._socket.remotePort; }));
+        res.send(requests.map(function (r) { return r.connection.remoteAddress + ':' + r.connection.remotePort; }));
     });
     app.post('/addPeer', function (req, res) {
         connectToPeers([req.body.peer]);
@@ -40,14 +41,15 @@ var initHttpServer = function () {
 };
 var initP2PServer = function () {
     var server = new WebSocket.Server({ port: p2p_port });
-    server.on('connection', function (ws) { return initConnection(ws); });
+    server.on('connection', function (socket, request) { return initConnection(socket, request); });
     console.log('listening websocket p2p port on: ' + p2p_port);
 };
-var initConnection = function (ws) {
-    sockets.push(ws);
-    initMessageHandler(ws);
-    initErrorHandler(ws);
-    write(ws, queryChainLengthMsg());
+var initConnection = function (socket, request) {
+    sockets.push(socket);
+    requests.push(request);
+    initMessageHandler(socket);
+    initErrorHandler(socket);
+    write(socket, JSON.stringify(queryChainLengthMsg()));
 };
 var initMessageHandler = function (ws) {
     ws.on('message', function (data) {
@@ -55,10 +57,10 @@ var initMessageHandler = function (ws) {
         console.log('Received message' + JSON.stringify(message));
         switch (message.type) {
             case MessageType.QUERY_LATEST:
-                write(ws, responseLatestMsg());
+                write(ws, JSON.stringify(responseLatestMsg()));
                 break;
             case MessageType.QUERY_ALL:
-                write(ws, responseChainMsg());
+                write(ws, JSON.stringify(responseChainMsg()));
                 break;
             case MessageType.RESPONSE_BLOCKCHAIN:
                 handleBlockchainResponse(message);
@@ -77,7 +79,7 @@ var initErrorHandler = function (ws) {
 var generateNextBlock = function (blockData) {
     var previousBlock = getLatestBlock();
     var nextIndex = previousBlock.index + 1;
-    var nextTimestamp = new Date().getTime() / 1000;
+    var nextTimestamp = new Date();
     var nextHash = calculateHash(nextIndex, previousBlock.hash, nextTimestamp, blockData);
     return new Block_1.default(nextIndex, previousBlock.hash, nextTimestamp, blockData, nextHash);
 };
@@ -85,7 +87,7 @@ var calculateHashForBlock = function (block) {
     return calculateHash(block.index, block.previousHash, block.timestamp, block.data);
 };
 var calculateHash = function (index, previousHash, timestamp, data) {
-    return CryptoJS.SHA256(index + previousHash + timestamp + data).toString();
+    return CryptoJS.SHA256(index + previousHash + timestamp.getTime() + data).toString();
 };
 var addBlock = function (newBlock) {
     if (isValidNewBlock(newBlock, getLatestBlock())) {
@@ -111,14 +113,14 @@ var isValidNewBlock = function (newBlock, previousBlock) {
 var connectToPeers = function (newPeers) {
     newPeers.forEach(function (peer) {
         var ws = new WebSocket(peer);
-        ws.on('open', function () { return initConnection(ws); });
+        ws.on('open', function (socket, request) { return initConnection(socket, request); });
         ws.on('error', function () {
             console.log('connection failed');
         });
     });
 };
 var handleBlockchainResponse = function (message) {
-    var receivedBlocks = JSON.parse(message.data).sort(function (b1, b2) { return (b1.index - b2.index); });
+    var receivedBlocks = JSON.parse(message).data.sort(function (b1, b2) { return (b1.index - b2.index); });
     var latestBlockReceived = receivedBlocks[receivedBlocks.length - 1];
     var latestBlockHeld = getLatestBlock();
     if (latestBlockReceived.index > latestBlockHeld.index) {
@@ -126,11 +128,11 @@ var handleBlockchainResponse = function (message) {
         if (latestBlockHeld.hash === latestBlockReceived.previousHash) {
             console.log("We can append the received block to our chain");
             blockchain.push(latestBlockReceived);
-            broadcast(responseLatestMsg());
+            broadcast(JSON.stringify(responseLatestMsg()));
         }
         else if (receivedBlocks.length === 1) {
             console.log("We have to query the chain from our peer");
-            broadcast(queryAllMsg());
+            broadcast(JSON.stringify(queryAllMsg()));
         }
         else {
             console.log("Received blockchain is longer than current blockchain");
@@ -145,7 +147,7 @@ var replaceChain = function (newBlocks) {
     if (isValidChain(newBlocks) && newBlocks.length > blockchain.length) {
         console.log('Received blockchain is valid. Replacing current blockchain with received blockchain');
         blockchain = newBlocks;
-        broadcast(responseLatestMsg());
+        broadcast(JSON.stringify(responseLatestMsg()));
     }
     else {
         console.log('Received blockchain invalid');
@@ -181,3 +183,4 @@ var broadcast = function (message) { return sockets.forEach(function (socket) { 
 connectToPeers(initialPeers);
 initHttpServer();
 initP2PServer();
+//# sourceMappingURL=main.js.map
