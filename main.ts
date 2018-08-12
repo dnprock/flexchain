@@ -10,7 +10,6 @@ let p2p_port = (process.env.P2P_PORT ? +process.env.P2P_PORT : 6001);
 let initialPeers = process.env.PEERS ? process.env.PEERS.split(',') : [];
 
 let sockets: WebSocket[] = [];
-let requests: IncomingMessage[] = [];
 let MessageType = {
     QUERY_LATEST: 0,
     QUERY_ALL: 1,
@@ -36,7 +35,7 @@ let initHttpServer = () => {
       res.send();
   });
   app.get('/peers', (req, res) => {
-      res.send(requests.map(r => r.connection.remoteAddress + ':' + r.connection.remotePort));
+      res.send(sockets.map(s => s.protocol));
   });
   app.post('/addPeer', (req, res) => {
       connectToPeers([req.body.peer]);
@@ -46,24 +45,33 @@ let initHttpServer = () => {
 };
 
 const initP2PServer = () => {
+  console.log(p2p_port);
   let server = new WebSocket.Server({port: p2p_port});
-  server.on('connection', (socket: WebSocket, request: IncomingMessage) => initConnection(socket, request));
+  server.on('connection', (socket: WebSocket) => initConnection(socket));
   console.log('listening websocket p2p port on: ' + p2p_port);
 };
 
-const initConnection = (socket: WebSocket, request: IncomingMessage) => {
+const initConnection = (socket: WebSocket) => {
+  console.log('initConnection ' + socket);
   sockets.push(socket);
-  requests.push(request);
   initMessageHandler(socket);
   initErrorHandler(socket);
   write(socket, JSON.stringify(queryChainLengthMsg()));
 };
 
 const initMessageHandler = (ws: WebSocket) => {
+  interface MessageData {
+      type: number;
+      data?: string;
+  }
   ws.on('message', (data: string) => {
-      let message = JSON.parse(data);
-      console.log('Received message' + JSON.stringify(message));
-      switch (message.type) {
+      console.log(data);
+      let messageData: MessageData = JSON.parse(data);
+
+      console.log('Received message ' + messageData);
+      console.log(typeof(messageData));
+      console.log(messageData.type);
+      switch (messageData.type) {
           case MessageType.QUERY_LATEST:
               write(ws, JSON.stringify(responseLatestMsg()));
               break;
@@ -71,7 +79,7 @@ const initMessageHandler = (ws: WebSocket) => {
               write(ws, JSON.stringify(responseChainMsg()));
               break;
           case MessageType.RESPONSE_BLOCKCHAIN:
-              handleBlockchainResponse(message);
+              handleBlockchainResponse(JSON.stringify(messageData));
               break;
       }
   });
@@ -128,7 +136,7 @@ const isValidNewBlock = (newBlock: Block, previousBlock: Block) => {
 const connectToPeers = (newPeers: string[]) => {
   newPeers.forEach((peer) => {
       let ws = new WebSocket(peer);
-      ws.on('open', (socket: WebSocket, request: IncomingMessage) => initConnection(socket, request));
+      ws.on('open', () => initConnection(ws));
       ws.on('error', () => {
           console.log('connection failed')
       });
@@ -183,14 +191,14 @@ const isValidChain = (blockchainToValidate: Block[]) => {
 };
 
 const getLatestBlock = () => blockchain[blockchain.length - 1];
-const queryChainLengthMsg = () => ({'type': MessageType.QUERY_LATEST});
-const queryAllMsg = () => ({'type': MessageType.QUERY_ALL});
+const queryChainLengthMsg = () => ({type: MessageType.QUERY_LATEST});
+const queryAllMsg = () => ({type: MessageType.QUERY_ALL});
 const responseChainMsg = () =>({
-  'type': MessageType.RESPONSE_BLOCKCHAIN, 'data': JSON.stringify(blockchain)
+  type: MessageType.RESPONSE_BLOCKCHAIN, data: JSON.stringify(blockchain)
 });
 const responseLatestMsg = () => ({
-  'type': MessageType.RESPONSE_BLOCKCHAIN,
-  'data': JSON.stringify([getLatestBlock()])
+  type: MessageType.RESPONSE_BLOCKCHAIN,
+  data: JSON.stringify([getLatestBlock()])
 });
 
 const write = (ws: WebSocket, message: string) => ws.send(JSON.stringify(message));
