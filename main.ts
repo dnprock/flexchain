@@ -59,18 +59,20 @@ const initConnection = (socket: WebSocket) => {
   write(socket, JSON.stringify(queryChainLengthMsg()));
 };
 
+interface MessageData {
+    type: number;
+}
+
 const initMessageHandler = (ws: WebSocket) => {
-  interface MessageData {
-      type: number;
-      data?: string;
-  }
-  ws.on('message', (data: string) => {
+  ws.on('message', (data: WebSocket.Data) => {
       console.log(data);
-      let messageData: MessageData = JSON.parse(data);
+      console.log(typeof(data));
+      let messageData: MessageData = JSON.parse(data.toString());
 
       console.log('Received message ' + messageData);
       console.log(typeof(messageData));
       console.log(messageData.type);
+      
       switch (messageData.type) {
           case MessageType.QUERY_LATEST:
               write(ws, JSON.stringify(responseLatestMsg()));
