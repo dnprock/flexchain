@@ -1,0 +1,2 @@
+# flexchain
+Flexible blockchain
