@@ -16,6 +16,10 @@ let MessageType = {
     RESPONSE_BLOCKCHAIN: 2
 };
 
+interface MessageData {
+    type: number;
+}
+
 const getGenesisBlock = () => {
     return new Block(0, "0", (new Date()), "flexchain genesis block!!", "816534932c2b7154836da6afc367695e6337db8a921823784c14378abed4f7d7");
 };
@@ -35,7 +39,7 @@ let initHttpServer = () => {
       res.send();
   });
   app.get('/peers', (req, res) => {
-      res.send(sockets.map(s => s.protocol));
+      res.send(sockets.map(s => s.url));
   });
   app.post('/addPeer', (req, res) => {
       connectToPeers([req.body.peer]);
@@ -45,33 +49,22 @@ let initHttpServer = () => {
 };
 
 const initP2PServer = () => {
-  console.log(p2p_port);
   let server = new WebSocket.Server({port: p2p_port});
   server.on('connection', (socket: WebSocket) => initConnection(socket));
   console.log('listening websocket p2p port on: ' + p2p_port);
 };
 
 const initConnection = (socket: WebSocket) => {
-  console.log('initConnection ' + socket);
   sockets.push(socket);
   initMessageHandler(socket);
   initErrorHandler(socket);
   write(socket, JSON.stringify(queryChainLengthMsg()));
 };
 
-interface MessageData {
-    type: number;
-}
-
 const initMessageHandler = (ws: WebSocket) => {
   ws.on('message', (data: WebSocket.Data) => {
-      console.log(data);
-      console.log(typeof(data));
-      let messageData: MessageData = JSON.parse(data.toString());
-
-      console.log('Received message ' + messageData);
-      console.log(typeof(messageData));
-      console.log(messageData.type);
+      let dataStr: string = data.toString();
+      const messageData: MessageData = JSON.parse(JSON.parse(dataStr));
       
       switch (messageData.type) {
           case MessageType.QUERY_LATEST:
@@ -136,6 +129,7 @@ const isValidNewBlock = (newBlock: Block, previousBlock: Block) => {
 };
 
 const connectToPeers = (newPeers: string[]) => {
+  console.log(newPeers);
   newPeers.forEach((peer) => {
       let ws = new WebSocket(peer);
       ws.on('open', () => initConnection(ws));
@@ -146,7 +140,8 @@ const connectToPeers = (newPeers: string[]) => {
 };
 
 const handleBlockchainResponse = (message: string) => {
-  let receivedBlocks = JSON.parse(message).data.sort((b1: Block, b2: Block) => (b1.index - b2.index));
+  let dataBlocks = JSON.parse(JSON.parse(message).data);
+  let receivedBlocks = dataBlocks.sort((b1: Block, b2: Block) => (b1.index - b2.index));
   let latestBlockReceived = receivedBlocks[receivedBlocks.length - 1];
   let latestBlockHeld = getLatestBlock();
   if (latestBlockReceived.index > latestBlockHeld.index) {
