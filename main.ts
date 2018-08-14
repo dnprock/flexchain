@@ -10,6 +10,7 @@ let p2p_port = (process.env.P2P_PORT ? +process.env.P2P_PORT : 6001);
 let initialPeers = process.env.PEERS ? process.env.PEERS.split(',') : [];
 
 let sockets: WebSocket[] = [];
+let peerUrls: string[] = [];
 let MessageType = {
     QUERY_LATEST: 0,
     QUERY_ALL: 1,
@@ -39,7 +40,7 @@ let initHttpServer = () => {
       res.send();
   });
   app.get('/peers', (req, res) => {
-      res.send(sockets.map(s => s.url));
+      res.send(sockets.map((s, index) => peerUrls[index]));
   });
   app.post('/addPeer', (req, res) => {
       connectToPeers([req.body.peer]);
@@ -50,9 +51,14 @@ let initHttpServer = () => {
 
 const initP2PServer = () => {
   let server = new WebSocket.Server({port: p2p_port});
-  server.on('connection', (socket: WebSocket) => initConnection(socket));
+  server.on('connection', (socket: WebSocket, request: IncomingMessage) => initServerConnection(socket, request));
   console.log('listening websocket p2p port on: ' + p2p_port);
 };
+
+const initServerConnection = (socket: WebSocket, request: IncomingMessage) => {
+  peerUrls.push(request.connection.remoteAddress + ':' + request.connection.remotePort);
+  initConnection(socket);
+}
 
 const initConnection = (socket: WebSocket) => {
   sockets.push(socket);
@@ -82,8 +88,11 @@ const initMessageHandler = (ws: WebSocket) => {
 
 const initErrorHandler = (ws: WebSocket) => {
   let closeConnection = (ws: WebSocket) => {
-      console.log('connection failed to peer: ' + ws.url);
-      sockets.splice(sockets.indexOf(ws), 1);
+      var index = sockets.indexOf(ws);
+      var peerUrl = peerUrls[index];
+      console.log('connection failed to peer: ' + peerUrl);
+      sockets.splice(index, 1);
+      peerUrls.splice(index, 1);
   };
   ws.on('close', () => closeConnection(ws));
   ws.on('error', () => closeConnection(ws));
@@ -129,9 +138,9 @@ const isValidNewBlock = (newBlock: Block, previousBlock: Block) => {
 };
 
 const connectToPeers = (newPeers: string[]) => {
-  console.log(newPeers);
   newPeers.forEach((peer) => {
       let ws = new WebSocket(peer);
+      peerUrls.push(peer);
       ws.on('open', () => initConnection(ws));
       ws.on('error', () => {
           console.log('connection failed')
