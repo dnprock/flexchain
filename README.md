@@ -5,6 +5,13 @@ Flexible blockchain
 
 We use ts-node.
 
+* Install packages:
+
+```
+npm install
+npm install -g ts-node
+```
+
 * Start a node:
 
 ```
