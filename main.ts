@@ -3,11 +3,14 @@ import * as express from 'express';
 import * as bodyParser from 'body-parser';
 import * as WebSocket from 'ws';
 import Block from './Block';
+import Store from './Store';
 import { IncomingMessage } from 'http';
 
 let http_port = process.env.HTTP_PORT || 3001;
 let p2p_port = (process.env.P2P_PORT ? +process.env.P2P_PORT : 6001);
 let initialPeers = process.env.PEERS ? process.env.PEERS.split(',') : [];
+
+let blockStore = new Store();
 
 let sockets: WebSocket[] = [];
 let peerUrls: string[] = [];
@@ -37,6 +40,9 @@ let initHttpServer = () => {
       addBlock(newBlock);
       broadcast(JSON.stringify(responseLatestMsg()));
       console.log('block added: ' + JSON.stringify(newBlock));
+      blockStore.write(newBlock);
+      const blocks: Block[] = blockStore.getBlocks();
+      console.log(blocks);
       res.send();
   });
   app.get('/peers', (req, res) => {
